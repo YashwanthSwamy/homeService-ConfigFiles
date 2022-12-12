@@ -1,0 +1,108 @@
+version: "3"
+services:
+  rabbitmq:
+    hostname: rabbitmq
+    image: "rabbitmq:3.8-management"
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://rabbitmq:5672"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      user_service_local_net:
+
+  postgres:
+    hostname: postgres
+    image: "postgres:11.10-alpine"
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      no_proxy: "127.0.0.1"
+    ports:
+      - "32768:5432"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://postgres:5432"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      user_service_local_net:
+
+  homeservicefrontend:
+    hostname: homeservice-frontend
+    image: frontend:local
+    build:
+      context: homeService-Frontend
+    ports:
+      - "12345:80"
+    networks:
+      user_service_local_net:
+    deploy:
+      resources:
+        limits:
+          memory: 126M
+        reservations:
+          memory: 50M
+
+  bookingservice:
+    hostname: homeservice-booking
+    image: booking-service:local
+    build:
+      context: ./homeService-BookingService
+    ports:
+      - "15001:15000"
+    environment:
+      PORT: 15001
+      MESSAGE_QUEUE_URI: amqp://guest:guest@rabbitmq:5672
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+    depends_on:
+      - "rabbitmq"
+      - "postgres"
+    networks:
+      user_service_local_net:
+
+  user-info:
+    hostname: homeservice-user-info
+    image: user-info:local
+    build:
+      context: userInfoService
+    ports:
+      - "8080:8080"
+    command: [ "npm", "run", "serve"]
+    environment:
+      MESSAGEQ_URL: amqp://guest:guest@rabbitmq
+      SQL_DB_URI: postgresql://postgres:postgres@postgres:5432/postgres
+    depends_on:
+      - "rabbitmq"
+      - "postgres"
+    networks:
+      user_service_local_net:
+
+  community:
+    hostname: homeservice-community
+    image: community-service:local
+    build:
+      context: ./homeService-community
+    ports:
+      - "8085:8085"
+    command: [ "npm", "run", "serve"]
+    environment:
+      MESSAGEQ_URL: amqp://guest:guest@rabbitmq
+      SQL_DB_URI: postgresql://postgres:postgres@postgres:5432/postgres
+    depends_on:
+      - "rabbitmq"
+      - "postgres"
+    networks:
+      user_service_local_net:
+
+networks:
+  user_service_local_net:
